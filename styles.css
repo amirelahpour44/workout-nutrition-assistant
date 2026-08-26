@@ -234,6 +234,44 @@ h2 {
   gap: 16px;
 }
 
+.day-chips {
+  display: flex;
+  gap: 8px;
+  overflow-x: auto;
+  padding-bottom: 6px;
+  margin-bottom: 14px;
+  scrollbar-width: thin;
+}
+
+.chip-btn {
+  display: inline-flex;
+  align-items: center;
+  flex: none;
+  padding: 7px 16px;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  background: var(--card);
+  color: var(--muted);
+  font: inherit;
+  font-size: 0.8rem;
+  font-weight: 600;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: border-color 0.15s, color 0.15s, background 0.15s;
+}
+
+.chip-btn:hover {
+  color: var(--text);
+  border-color: var(--border-strong);
+}
+
+.chip-btn.is-active {
+  color: var(--day-color, var(--accent));
+  border-color: var(--day-color, var(--accent));
+  background: rgba(255, 255, 255, 0.03);
+  box-shadow: inset 0 0 0 1px var(--day-color, var(--accent));
+}
+
 .card {
   background: var(--card);
   border: 1px solid var(--border);

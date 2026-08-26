@@ -27,7 +27,9 @@ var state = {
     mealId: null,
     mealIsNew: false,
     itemId: null,
-    itemIsNew: false
+    itemIsNew: false,
+    selectedPlanDayId: null,
+    selectedTrackerDayId: null
   }
 };
 
@@ -346,6 +348,21 @@ function findDay(dayId) {
   }) || null;
 }
 
+function ensureSelectedDayId(currentId) {
+  if (currentId && state.plan.days.some(function (day) {
+    return day.id === currentId;
+  })) return currentId;
+  return state.plan.days.length ? state.plan.days[0].id : null;
+}
+
+function buildChipsHtml(days, selectedId, actionName) {
+  return days.map(function (day) {
+    var color = DAY_COLORS[day.colorIndex % DAY_COLORS.length];
+    var isActive = day.id === selectedId;
+    return '<button type="button" class="chip-btn' + (isActive ? ' is-active' : '') + '" style="--day-color:' + esc(color) + '" data-action="' + actionName + '" data-id="' + esc(day.id) + '" aria-pressed="' + isActive + '">' + esc(day.name || 'بدون نام') + '</button>';
+  }).join('');
+}
+
 function findMeal(mealId) {
   return state.nutrition.meals.find(function (meal) {
     return meal.id === mealId;
@@ -398,11 +415,16 @@ function resetUiEditing() {
 
 function renderPlan() {
   var wrap = $('#plan-days');
-  wrap.innerHTML = '';
   $('#plan-empty').hidden = state.plan.days.length > 0;
-  state.plan.days.forEach(function (day, index) {
-    wrap.insertAdjacentHTML('beforeend', buildDayCardHtml(day, index));
+  state.ui.selectedPlanDayId = ensureSelectedDayId(state.ui.selectedPlanDayId);
+  var chips = $('#plan-day-chips');
+  chips.hidden = state.plan.days.length === 0;
+  chips.innerHTML = buildChipsHtml(state.plan.days, state.ui.selectedPlanDayId, 'select-plan-day');
+  wrap.innerHTML = '';
+  var index = state.plan.days.findIndex(function (day) {
+    return day.id === state.ui.selectedPlanDayId;
   });
+  if (index !== -1) wrap.insertAdjacentHTML('beforeend', buildDayCardHtml(state.plan.days[index], index));
 }
 
 function buildDayCardHtml(day, index) {
@@ -481,27 +503,58 @@ function renderTracker() {
   var hasExercises = state.plan.days.some(function (day) {
     return day.exercises.length > 0;
   });
-  $('#tracker-empty').hidden = hasExercises;
-  $('#tracker-days').hidden = !hasExercises;
-
+  var chips = $('#tracker-day-chips');
   var wrap = $('#tracker-days');
-  wrap.innerHTML = '';
-  if (!hasExercises) return;
+  $('#tracker-empty').hidden = hasExercises;
 
-  state.plan.days.forEach(function (day) {
-    if (!day.exercises.length) return;
-    var color = DAY_COLORS[day.colorIndex % DAY_COLORS.length];
-    var rows = day.exercises.map(function (ex) {
-      return buildTrackRowHtml(info.key, prevInfo.key, ex);
-    }).join('');
+  if (!hasExercises) {
+    chips.hidden = true;
+    wrap.hidden = true;
+    wrap.innerHTML = '';
+    return;
+  }
+
+  state.ui.selectedTrackerDayId = ensureSelectedDayId(state.ui.selectedTrackerDayId);
+  chips.hidden = false;
+  chips.innerHTML = buildChipsHtml(state.plan.days, state.ui.selectedTrackerDayId, 'select-tracker-day');
+  wrap.hidden = false;
+  wrap.innerHTML = '';
+
+  var dayIndex = state.plan.days.findIndex(function (day) {
+    return day.id === state.ui.selectedTrackerDayId;
+  });
+  var day = state.plan.days[dayIndex];
+  var color = DAY_COLORS[day.colorIndex % DAY_COLORS.length];
+  var head =
+    '<header class="day-head">' +
+      '<span class="day-chip">' + esc(day.name) + '</span>' +
+      '<span class="meal-sum">' + faNum(day.exercises.length) + ' تمرین</span>' +
+    '</header>';
+
+  if (!day.exercises.length) {
     wrap.insertAdjacentHTML(
       'beforeend',
       '<article class="card day-card" style="--day-color:' + esc(color) + '">' +
-        '<header class="day-head"><span class="day-chip">' + esc(day.name) + '</span></header>' +
-        '<div class="stack" style="gap:10px">' + rows + '</div>' +
+        head +
+        '<div class="empty" style="padding:26px 16px">' +
+          '<p>برای این روز هنوز تمرینی تعریف نشده است.</p>' +
+          '<button type="button" class="btn btn-primary btn-sm" data-goto-tab="plan">افزودن تمرین در برنامه تمرینی</button>' +
+        '</div>' +
       '</article>'
     );
-  });
+    return;
+  }
+
+  var rows = day.exercises.map(function (ex) {
+    return buildTrackRowHtml(info.key, prevInfo.key, ex);
+  }).join('');
+  wrap.insertAdjacentHTML(
+    'beforeend',
+    '<article class="card day-card" style="--day-color:' + esc(color) + '">' +
+      head +
+      '<div class="stack" style="gap:10px">' + rows + '</div>' +
+    '</article>'
+  );
 }
 
 function buildTrackRowHtml(weekKey, prevWeekKey, ex) {
@@ -730,14 +783,16 @@ function queueLogsSave() {
 }
 
 function addDay() {
-  state.plan.days.push({
+  var day = {
     id: uid(),
     name: nextDayName(),
     colorIndex: state.plan.days.length % DAY_COLORS.length,
     exercises: []
-  });
+  };
+  state.plan.days.push(day);
   persistPlan();
   resetUiEditing();
+  state.ui.selectedPlanDayId = day.id;
   renderPlan();
   showToast('روز جدید اضافه شد.', 'success');
 }
@@ -757,6 +812,8 @@ function deleteDay(dayId) {
         return d.id !== dayId;
       });
       removeExercisesFromLogs(ids);
+      if (state.ui.selectedPlanDayId === dayId) state.ui.selectedPlanDayId = null;
+      if (state.ui.selectedTrackerDayId === dayId) state.ui.selectedTrackerDayId = null;
       persistPlan();
       persistLogs();
       resetUiEditing();
@@ -1050,6 +1107,17 @@ var ACTIONS = {
   'move-exercise': function (btn) {
     moveExercise(btn.dataset.day, btn.dataset.id, parseInt(btn.dataset.dir, 10));
   },
+  'select-plan-day': function (btn) {
+    flushPendingLogsSave();
+    resetUiEditing();
+    state.ui.selectedPlanDayId = btn.dataset.id;
+    renderPlan();
+  },
+  'select-tracker-day': function (btn) {
+    flushPendingLogsSave();
+    state.ui.selectedTrackerDayId = btn.dataset.id;
+    renderTracker();
+  },
   'add-meal': function () {
     addMeal();
   },
@@ -1224,6 +1292,10 @@ function bindEvents() {
     day.name = name || day.name;
     input.value = day.name;
     persistPlan();
+    ['#plan-day-chips', '#tracker-day-chips'].forEach(function (sel) {
+      var chip = $(sel + ' .chip-btn[data-id="' + day.id + '"]');
+      if (chip) chip.textContent = day.name;
+    });
     renderTracker();
   });
 
