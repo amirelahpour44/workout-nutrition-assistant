@@ -1,0 +1,167 @@
+<!DOCTYPE html>
+<html lang="fa" dir="rtl">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="dark">
+  <title>دستیار تمرین و تغذیه</title>
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Crect width='24' height='24' rx='6' fill='%237c6cf0'/%3E%3Cg fill='none' stroke='%23ffffff' stroke-width='2' stroke-linecap='round'%3E%3Cpath d='M7 7v10M17 7v10M4 9.5v5M20 9.5v5M7 12h10'/%3E%3C/g%3E%3C/svg%3E">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Vazirmatn:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+
+  <header class="topbar">
+    <div class="container topbar-inner">
+      <div class="brand">
+        <span class="brand-logo" aria-hidden="true">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M7 7v10"/><path d="M17 7v10"/><path d="M4 9.5v5"/><path d="M20 9.5v5"/><path d="M7 12h10"/></svg>
+        </span>
+        <span class="brand-text">
+          <strong>دستیار تمرین و تغذیه</strong>
+          <small>همه‌چیز محلی — داده‌ها فقط در همین مرورگر</small>
+        </span>
+      </div>
+      <div class="topbar-actions">
+        <button type="button" class="btn btn-ghost btn-sm" id="btn-download-backup">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+          دانلود بکاپ
+        </button>
+        <button type="button" class="btn btn-ghost btn-sm" id="btn-restore-backup">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+          بازگردانی بکاپ
+        </button>
+        <input type="file" id="restore-file" accept=".json,application/json" hidden>
+      </div>
+    </div>
+  </header>
+
+  <nav class="container tabs-wrap">
+    <div class="tabs" role="tablist" aria-label="بخش‌های برنامه">
+      <button type="button" class="tab is-active" role="tab" aria-selected="true" id="tab-plan" data-tab="plan" aria-controls="panel-plan">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="8" y="2" width="8" height="4" rx="1"/><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/><path d="M12 11h4"/><path d="M12 16h4"/><path d="M8 11h.01"/><path d="M8 16h.01"/></svg>
+        برنامه تمرینی
+      </button>
+      <button type="button" class="tab" role="tab" aria-selected="false" id="tab-tracker" data-tab="tracker" aria-controls="panel-tracker">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="m9 12 2 2 4-4"/></svg>
+        ثبت تمرین
+      </button>
+      <button type="button" class="tab" role="tab" aria-selected="false" id="tab-nutrition" data-tab="nutrition" aria-controls="panel-nutrition">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20.94c1.5 0 2.75 1.06 4 1.06 3 0 6-8 6-12.22A4.91 4.91 0 0 0 17 5c-2.22 0-4 1.44-5 2-1-.56-2.78-2-5-2a4.9 4.9 0 0 0-5 4.78C2 14 5 22 8 22c1.25 0 2.5-1.06 4-1.06Z"/><path d="M10 2c1 .5 2 2 2 5"/></svg>
+        برنامه تغذیه
+      </button>
+    </div>
+  </nav>
+
+  <main class="container">
+
+    <section class="panel" id="panel-plan" role="tabpanel" aria-labelledby="tab-plan">
+      <div class="section-head">
+        <div>
+          <h2>برنامه تمرینی هفتگی</h2>
+          <p class="muted">روزها و تمرین‌های خود را بسازید، نام‌گذاری کنید و ترتیبشان را مرتب کنید.</p>
+        </div>
+        <button type="button" class="btn btn-primary" id="btn-add-day">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M5 12h14"/><path d="M12 5v14"/></svg>
+          افزودن روز جدید
+        </button>
+      </div>
+      <div id="plan-days" class="stack"></div>
+      <div id="plan-empty" class="empty" hidden>
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="8" y="2" width="8" height="4" rx="1"/><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/><path d="M12 11h4"/><path d="M12 16h4"/></svg>
+        <p>هنوز روزی در برنامه وجود ندارد.</p>
+        <button type="button" class="btn btn-primary" data-action="add-day">ساخت اولین روز</button>
+      </div>
+    </section>
+
+    <section class="panel" id="panel-tracker" role="tabpanel" aria-labelledby="tab-tracker" hidden>
+      <div class="week-nav card">
+        <button type="button" class="icon-btn big" id="btn-prev-week" aria-label="هفته قبل" title="هفته قبل">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m9 18 6-6-6-6"/></svg>
+        </button>
+        <div class="week-title">
+          <strong id="week-label">…</strong>
+          <span class="muted" id="week-range"></span>
+        </div>
+        <button type="button" class="icon-btn big" id="btn-next-week" aria-label="هفته بعد" title="هفته بعد">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m15 18-6-6 6-6"/></svg>
+        </button>
+      </div>
+      <div class="tracker-bar">
+        <span id="save-status" class="status-pill" data-state="idle" hidden></span>
+        <button type="button" class="btn-link" id="btn-current-week" hidden>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/></svg>
+          بازگشت به هفته جاری
+        </button>
+      </div>
+      <div id="tracker-days" class="stack"></div>
+      <div id="tracker-empty" class="empty" hidden>
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M7 7v10"/><path d="M17 7v10"/><path d="M4 9.5v5"/><path d="M20 9.5v5"/><path d="M7 12h10"/></svg>
+        <p>برای ثبت وزنه و تکرار، ابتدا از بخش «برنامه تمرینی» چند تمرین اضافه کنید.</p>
+        <button type="button" class="btn btn-primary" data-goto-tab="plan">رفتن به برنامه تمرینی</button>
+      </div>
+    </section>
+
+    <section class="panel" id="panel-nutrition" role="tabpanel" aria-labelledby="tab-nutrition" hidden>
+      <div class="section-head">
+        <div>
+          <h2>برنامه تغذیه روزانه</h2>
+          <p class="muted">وعده‌ها و مواد غذایی را وارد کنید؛ جمع پروتئین و کالری به‌صورت خودکار محاسبه می‌شود.</p>
+        </div>
+        <button type="button" class="btn btn-primary" id="btn-add-meal">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M5 12h14"/><path d="M12 5v14"/></svg>
+          افزودن وعده جدید
+        </button>
+      </div>
+      <div id="nutrition-meals" class="stack"></div>
+      <div id="nutrition-empty" class="empty" hidden>
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20.94c1.5 0 2.75 1.06 4 1.06 3 0 6-8 6-12.22A4.91 4.91 0 0 0 17 5c-2.22 0-4 1.44-5 2-1-.56-2.78-2-5-2a4.9 4.9 0 0 0-5 4.78C2 14 5 22 8 22c1.25 0 2.5-1.06 4-1.06Z"/><path d="M10 2c1 .5 2 2 2 5"/></svg>
+        <p>هنوز وعده‌ای ثبت نشده است.</p>
+        <button type="button" class="btn btn-primary" data-action="add-meal">ساخت اولین وعده</button>
+      </div>
+      <div id="nutrition-summary" class="summary card" hidden>
+        <div class="summary-title">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8.5 14.5A2.5 2.5 0 0 0 11 12c0-1.38-.5-2-1-3-1.072-2.143-.224-4.054 2-6 .5 2.5 2 4.9 4 6.5 2 1.6 3 3.5 3 5.5a7 7 0 1 1-14 0c0-1.153.433-2.294 1-3a2.5 2.5 0 0 0 2.5 2.5z"/></svg>
+          جمع تقریبی کل روز
+        </div>
+        <div class="stat">
+          <b id="total-protein">۰</b>
+          <small>گرم پروتئین</small>
+        </div>
+        <div class="stat-divider" aria-hidden="true"></div>
+        <div class="stat">
+          <b id="total-kcal">۰</b>
+          <small>کیلوکالری</small>
+        </div>
+      </div>
+    </section>
+
+  </main>
+
+  <footer class="footer">
+    <div class="container">
+      <p>
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1z"/><path d="m9 12 2 2 4-4"/></svg>
+        تمام اطلاعات فقط روی این دستگاه ذخیره می‌شود؛ هیچ درخواستی به هیچ سرور ارسال نمی‌شود.
+      </p>
+    </div>
+  </footer>
+
+  <div class="overlay" id="confirm-overlay" hidden>
+    <div class="modal card" role="dialog" aria-modal="true" aria-labelledby="confirm-message">
+      <h3 id="confirm-title"></h3>
+      <p id="confirm-message" class="muted"></p>
+      <div class="modal-actions">
+        <button type="button" class="btn btn-danger" id="confirm-ok"></button>
+        <button type="button" class="btn btn-ghost" id="confirm-cancel">انصراف</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="toast" class="toast" role="status"></div>
+
+  <script src="app.js"></script>
+</body>
+</html>
