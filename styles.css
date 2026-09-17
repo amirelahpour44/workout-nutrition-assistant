@@ -134,10 +134,9 @@ button svg,
   height: 42px;
   display: grid;
   place-items: center;
-  color: #fff;
-  background: linear-gradient(135deg, #7c6cf0, #4f7df3);
   border-radius: 12px;
-  box-shadow: 0 6px 18px rgba(124, 108, 240, 0.35);
+  overflow: hidden;
+  box-shadow: 0 4px 16px rgba(124, 108, 240, 0.4);
 }
 
 .brand-text strong {

@@ -4,8 +4,22 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="color-scheme" content="dark">
+  <meta name="theme-color" content="#0a0a0c">
   <title>دستیار تمرین و تغذیه</title>
-  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Crect width='24' height='24' rx='6' fill='%237c6cf0'/%3E%3Cg fill='none' stroke='%23ffffff' stroke-width='2' stroke-linecap='round'%3E%3Cpath d='M7 7v10M17 7v10M4 9.5v5M20 9.5v5M7 12h10'/%3E%3C/g%3E%3C/svg%3E">
+
+  <!-- PWA & Mobile Web App Meta Tags -->
+  <link rel="manifest" href="manifest.json">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="تمرین و تغذیه">
+  <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+
+  <!-- Icons -->
+  <link rel="icon" type="image/svg+xml" href="icons/icon.svg">
+  <link rel="icon" type="image/png" sizes="32x32" href="icons/favicon-32x32.png">
+  <link rel="icon" type="image/png" sizes="192x192" href="icons/icon-192.png">
+  <link rel="shortcut icon" href="favicon.ico">
+
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Vazirmatn:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet">
@@ -17,7 +31,7 @@
     <div class="container topbar-inner">
       <div class="brand">
         <span class="brand-logo" aria-hidden="true">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M7 7v10"/><path d="M17 7v10"/><path d="M4 9.5v5"/><path d="M20 9.5v5"/><path d="M7 12h10"/></svg>
+          <img src="icons/icon-192.png" alt="لوگو" width="42" height="42" style="width:100%;height:100%;object-fit:cover;border-radius:12px;">
         </span>
         <span class="brand-text">
           <strong>دستیار تمرین و تغذیه</strong>
@@ -165,5 +179,14 @@
   <div id="toast" class="toast" role="status"></div>
 
   <script src="app.js"></script>
+  <script>
+    if ('serviceWorker' in navigator) {
+      window.addEventListener('load', () => {
+        navigator.serviceWorker.register('./sw.js').catch((err) => {
+          console.warn('ServiceWorker registration error:', err);
+        });
+      });
+    }
+  </script>
 </body>
 </html>
