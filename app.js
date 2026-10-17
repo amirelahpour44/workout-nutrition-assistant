@@ -10,6 +10,7 @@ var BACKUP_APP_ID = 'wna';
 var BACKUP_VERSION = 1;
 var SAVE_DEBOUNCE_MS = 700;
 var STATUS_HIDE_MS = 2500;
+var DAY_NOTE_PREFIX = 'day:';
 
 var DAY_COLORS = ['#ef4444', '#3b82f6', '#f97316', '#a855f7', '#eab308', '#22c55e', '#14b8a6'];
 var DEFAULT_DAY_NAMES = ['شنبه', 'یکشنبه', 'دوشنبه', 'سه‌شنبه', 'چهارشنبه', 'پنجشنبه', 'جمعه'];
@@ -84,7 +85,8 @@ function icon(name, cls) {
     down: '<path d="m6 9 6 6 6-6"/>',
     plus: '<path d="M5 12h14"/><path d="M12 5v14"/>',
     bulb: '<path d="M9 18h6"/><path d="M10 22h4"/><path d="M15.09 14c.18-.98.65-1.74 1.41-2.5A4.65 4.65 0 0 0 18 8 6 6 0 0 0 6 8c0 1 .23 2.23 1.5 3.5A4.61 4.61 0 0 1 8.91 14"/>',
-    utensils: '<path d="M3 2v7c0 1.1.9 2 2 2h4a2 2 0 0 0 2-2V2"/><path d="M7 2v20"/><path d="M21 15V2a5 5 0 0 0-5 5v6c0 1.1.9 2 2 2h3Zm0 0v7"/>'
+    utensils: '<path d="M3 2v7c0 1.1.9 2 2 2h4a2 2 0 0 0 2-2V2"/><path d="M7 2v20"/><path d="M21 15V2a5 5 0 0 0-5 5v6c0 1.1.9 2 2 2h3Zm0 0v7"/>',
+    trophy: '<path d="M6 9H4.5a2.5 2.5 0 0 1 0-5H6"/><path d="M18 9h1.5a2.5 2.5 0 0 0 0-5H18"/><path d="M4 22h16"/><path d="M10 14.66V17c0 .55-.47.98-.97 1.21C7.85 18.75 7 20.24 7 22"/><path d="M14 14.66V17c0 .55.47.98.97 1.21C16.15 18.75 17 20.24 17 22"/><path d="M18 2H6v7a6 6 0 0 0 12 0V2Z"/>'
   };
   return '<svg class="' + (cls || 'ic') + '" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' + paths[name] + '</svg>';
 }
@@ -392,6 +394,65 @@ function removeExercisesFromLogs(exerciseIds) {
   });
 }
 
+function dayNoteKey(dayId) {
+  return DAY_NOTE_PREFIX + dayId;
+}
+
+function removeDayNotesFromLogs(dayId) {
+  var key = dayNoteKey(dayId);
+  Object.keys(state.logs).forEach(function (weekKey) {
+    delete state.logs[weekKey][key];
+  });
+}
+
+function getPersonalRecord(exId, field, upToWeekKey, skipCurrentWeek) {
+  var best = null;
+  Object.keys(state.logs).forEach(function (weekKey) {
+    if (weekKey > upToWeekKey) return;
+    if (skipCurrentWeek && weekKey === upToWeekKey) return;
+    var rec = state.logs[weekKey][exId];
+    if (!rec) return;
+    var value = num(rec[field]);
+    if (value != null && (best == null || value > best)) best = value;
+  });
+  return best;
+}
+
+function isNewRecord(exId, field, weekKey, value) {
+  var value2 = num(value);
+  if (value2 == null) return false;
+  var priorBest = getPersonalRecord(exId, field, weekKey, true);
+  return priorBest == null || value2 > priorBest;
+}
+
+function isStaleNum(exId, weekKey, prevWeekKey) {
+  var cur = (state.logs[weekKey] || {})[exId] || {};
+  var prev = (state.logs[prevWeekKey] || {})[exId] || {};
+  var fields = ['w', 'r', 's'];
+  for (var i = 0; i < fields.length; i++) {
+    var a = num(cur[fields[i]]);
+    var b = num(prev[fields[i]]);
+    if (a == null || b == null || a !== b) return false;
+  }
+  return true;
+}
+
+function updateRowHighlights(weekKey, prevWeekKey, exerciseId) {
+  var row = $('#tracker-days .track-row[data-ex-row="' + exerciseId + '"]');
+  if (!row) return;
+  row.classList.toggle('is-stale', isStaleNum(exerciseId, weekKey, prevWeekKey));
+  var hasPr = false;
+  ['w', 'r', 's'].forEach(function (field) {
+    var input = row.querySelector('input[data-field="' + field + '"]');
+    if (!input) return;
+    var isPr = isNewRecord(exerciseId, field, weekKey, input.value);
+    input.classList.toggle('is-pr', isPr);
+    if (isPr) hasPr = true;
+  });
+  var trophy = row.querySelector('.pr-trophy');
+  if (trophy) trophy.hidden = !hasPr;
+}
+
 function persistPlan() {
   return writeStore(KEYS.plan, state.plan);
 }
@@ -540,6 +601,7 @@ function renderTracker() {
           '<p>برای این روز هنوز تمرینی تعریف نشده است.</p>' +
           '<button type="button" class="btn btn-primary btn-sm" data-goto-tab="plan">افزودن تمرین در برنامه تمرینی</button>' +
         '</div>' +
+        buildDaySummaryHtml(info.key, day) +
       '</article>'
     );
     return;
@@ -553,11 +615,26 @@ function renderTracker() {
     '<article class="card day-card" style="--day-color:' + esc(color) + '">' +
       head +
       '<div class="stack" style="gap:10px">' + rows + '</div>' +
+      buildDaySummaryHtml(info.key, day) +
     '</article>'
   );
 }
 
+function buildDaySummaryHtml(weekKey, day) {
+  var note = (state.logs[weekKey] || {})[dayNoteKey(day.id)] || {};
+  return (
+    '<div class="day-summary">' +
+      '<label class="field">خلاصه این روز (اختیاری)' +
+        '<textarea rows="2" maxlength="500" placeholder="مثلاً: حس خوبی داشتم، وزنه‌ها خوب رفت؛ خواب کم بود…" data-day-note data-wk="' + esc(weekKey) + '" data-day="' + esc(day.id) + '">' + esc(val(note.note)) + '</textarea>' +
+      '</label>' +
+    '</div>'
+  );
+}
+
 function buildTrackRowHtml(weekKey, prevWeekKey, ex) {
+  function fieldLabel(field) {
+    return field === 'w' ? 'وزنه (کیلوگرم)' : field === 'r' ? 'تکرار واقعی' : 'ست انجام‌شده';
+  }
   var rec = (state.logs[weekKey] || {})[ex.id] || {};
   var prev = (state.logs[prevWeekKey] || {})[ex.id] || {};
   var prevParts = [];
@@ -567,25 +644,33 @@ function buildTrackRowHtml(weekKey, prevWeekKey, ex) {
   var prevHint = prevParts.length
     ? 'هفته قبل: ' + prevParts.join(' • ')
     : 'هفته قبل مقداری ثبت نشده';
-  function cell(label, field, step, placeholder) {
+  function cell(field, step) {
+    var record = getPersonalRecord(ex.id, field, weekKey);
+    var isPr = isNewRecord(ex.id, field, weekKey, rec[field]);
     return (
       '<div class="track-cell">' +
-        '<label>' + label +
-          '<input type="number" min="0" step="' + step + '" inputmode="decimal" placeholder="' + placeholder + '" data-wk="' + esc(weekKey) + '" data-ex="' + esc(ex.id) + '" data-field="' + field + '" value="' + esc(val(rec[field])) + '">' +
+        '<label>' + fieldLabel(field) +
+          '<input class="' + (isPr ? 'is-pr' : '') + '" type="number" min="0" step="' + step + '" inputmode="decimal" placeholder="' + (record != null ? faNum(record) : '') + '" data-wk="' + esc(weekKey) + '" data-ex="' + esc(ex.id) + '" data-field="' + field + '" value="' + esc(val(rec[field])) + '">' +
         '</label>' +
       '</div>'
     );
   }
+  var hasPrThisWeek = false;
+  ['w', 'r', 's'].forEach(function (field) {
+    if (isNewRecord(ex.id, field, weekKey, rec[field])) hasPrThisWeek = true;
+  });
+  var trophy = '<span class="pr-trophy"' + (hasPrThisWeek ? '' : ' hidden') + ' title="رکورد جدید در این هفته">' + icon('trophy') + '</span>';
+  var stale = isStaleNum(ex.id, weekKey, prevWeekKey);
   return (
-    '<div class="track-row" data-ex-row="' + esc(ex.id) + '">' +
+    '<div class="track-row' + (stale ? ' is-stale' : '') + '" data-ex-row="' + esc(ex.id) + '">' +
       '<div class="t-info">' +
-        '<strong>' + esc(ex.name) + '</strong>' +
+        '<strong>' + esc(ex.name) + trophy + '</strong>' +
         (ex.note ? '<span class="prev-hint">' + icon('bulb') + ' ' + esc(ex.note) + '</span>' : '') +
         '<span class="prev-hint">' + esc(prevHint) + '</span>' +
       '</div>' +
-      cell('وزنه (کیلوگرم)', 'w', '0.25', val(prev.w)) +
-      cell('تکرار واقعی', 'r', '1', val(prev.r)) +
-      cell('ست انجام‌شده', 's', '1', val(prev.s)) +
+      cell('w', '0.25') +
+      cell('r', '1') +
+      cell('s', '1') +
     '</div>'
   );
 }
@@ -812,6 +897,7 @@ function deleteDay(dayId) {
         return d.id !== dayId;
       });
       removeExercisesFromLogs(ids);
+      removeDayNotesFromLogs(dayId);
       if (state.ui.selectedPlanDayId === dayId) state.ui.selectedPlanDayId = null;
       if (state.ui.selectedTrackerDayId === dayId) state.ui.selectedTrackerDayId = null;
       persistPlan();
@@ -1300,6 +1386,15 @@ function bindEvents() {
   });
 
   $('#panel-tracker').addEventListener('input', function (event) {
+    var noteInput = event.target.closest('textarea[data-day-note]');
+    if (noteInput) {
+      var nWeek = noteInput.dataset.wk;
+      var nDay = noteInput.dataset.day;
+      if (!state.logs[nWeek]) state.logs[nWeek] = {};
+      state.logs[nWeek][dayNoteKey(nDay)] = { note: noteInput.value.trim() };
+      queueLogsSave();
+      return;
+    }
     var input = event.target.closest('input[data-wk]');
     if (!input) return;
     var weekKey = input.dataset.wk;
@@ -1308,6 +1403,7 @@ function bindEvents() {
     if (!state.logs[weekKey]) state.logs[weekKey] = {};
     if (!state.logs[weekKey][exerciseId]) state.logs[weekKey][exerciseId] = {};
     state.logs[weekKey][exerciseId][field] = input.value.trim();
+    updateRowHighlights(weekKey, weekInfoAt(state.weekOffset - 1).key, exerciseId);
     queueLogsSave();
   });
 
