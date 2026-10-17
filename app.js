@@ -11,6 +11,7 @@ var BACKUP_VERSION = 1;
 var SAVE_DEBOUNCE_MS = 700;
 var STATUS_HIDE_MS = 2500;
 var DAY_NOTE_PREFIX = 'day:';
+var APP_UPDATE_KEY = 'wna_last_update';
 
 var DAY_COLORS = ['#ef4444', '#3b82f6', '#f97316', '#a855f7', '#eab308', '#22c55e', '#14b8a6'];
 var DEFAULT_DAY_NAMES = ['شنبه', 'یکشنبه', 'دوشنبه', 'سه‌شنبه', 'چهارشنبه', 'پنجشنبه', 'جمعه'];
@@ -1331,6 +1332,66 @@ function restoreBackup(file) {
   reader.readAsText(file, 'utf-8');
 }
 
+function requestAppUpdate() {
+  askConfirm({
+    title: 'به‌روزرسانی اپ',
+    message: 'آخرین نسخه از سرور دریافت و صفحه دوباره بارگیری می‌شود. داده‌های شما حذف نمی‌شود.',
+    okLabel: 'به‌روزرسانی',
+    onOk: function () {
+      performAppUpdate();
+    }
+  });
+}
+
+function performAppUpdate() {
+  var cleanup = Promise.resolve();
+  if ('serviceWorker' in navigator) {
+    cleanup = navigator.serviceWorker.getRegistrations().then(function (registrations) {
+      return Promise.all(registrations.map(function (registration) {
+        return registration.unregister();
+      }));
+    }).catch(function () { /* noop */ });
+  }
+  if (self.caches && caches.keys) {
+    cleanup = cleanup.then(function () {
+      return caches.keys().then(function (keys) {
+        return Promise.all(keys.map(function (key) {
+          return caches.delete(key);
+        }));
+      });
+    }).catch(function () { /* noop */ });
+  }
+  cleanup.then(function () {
+    try {
+      localStorage.setItem(APP_UPDATE_KEY, String(Date.now()));
+    } catch (err) {
+      /* noop */
+    }
+    showToast('در حال دریافت نسخه جدید…', 'success');
+    setTimeout(function () {
+      window.location.reload();
+    }, 500);
+  });
+}
+
+function announceRecentUpdate() {
+  var ts = 0;
+  try {
+    ts = Number(localStorage.getItem(APP_UPDATE_KEY) || 0);
+  } catch (err) {
+    return;
+  }
+  if (!ts) return;
+  try {
+    localStorage.removeItem(APP_UPDATE_KEY);
+  } catch (err) {
+    /* noop */
+  }
+  if (Date.now() - ts < 20000) {
+    showToast('اپ به آخرین نسخه به‌روزرسانی شد.', 'success');
+  }
+}
+
 function loadData(seedIfMissing) {
   var planRes = loadSection(KEYS.plan, validPlan, makeSeedPlan);
   state.plan = planRes.value;
@@ -1427,6 +1488,7 @@ function bindEvents() {
   });
 
   $('#btn-download-backup').addEventListener('click', downloadBackup);
+  $('#btn-app-update').addEventListener('click', requestAppUpdate);
   $('#btn-restore-backup').addEventListener('click', function () {
     $('#restore-file').click();
   });
@@ -1459,4 +1521,5 @@ loadData(true);
 if (typeof document !== 'undefined' && document.getElementById('plan-days')) {
   bindEvents();
   renderAll();
+  announceRecentUpdate();
 }

@@ -1,4 +1,4 @@
-const CACHE_NAME = 'workout-nutrition-v2';
+const CACHE_NAME = 'workout-nutrition-v3';
 const ASSETS = [
   './',
   './index.html',
@@ -31,21 +31,17 @@ self.addEventListener('activate', (event) => {
 
 self.addEventListener('fetch', (event) => {
   if (event.request.method !== 'GET') return;
-  
+
+  // Network-first: always try the latest version online; fall back to cache when offline
   event.respondWith(
-    caches.match(event.request).then((cachedResponse) => {
-      if (cachedResponse) {
-        // Fetch in background to update cache (stale-while-revalidate)
-        fetch(event.request).then((networkResponse) => {
-          if (networkResponse && networkResponse.status === 200) {
-            caches.open(CACHE_NAME).then((cache) => cache.put(event.request, networkResponse));
-          }
-        }).catch(() => {});
-        return cachedResponse;
+    fetch(event.request).then((networkResponse) => {
+      if (networkResponse && networkResponse.status === 200) {
+        const copy = networkResponse.clone();
+        caches.open(CACHE_NAME).then((cache) => cache.put(event.request, copy));
       }
-      return fetch(event.request).then((networkResponse) => {
-        return networkResponse;
-      });
+      return networkResponse;
+    }).catch(() => {
+      return caches.match(event.request).then((cachedResponse) => cachedResponse || caches.match('./'));
     })
   );
 });
