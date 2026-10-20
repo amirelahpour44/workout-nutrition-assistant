@@ -31,7 +31,8 @@ var state = {
     itemId: null,
     itemIsNew: false,
     selectedPlanDayId: null,
-    selectedTrackerDayId: null
+    selectedTrackerDayId: null,
+    expandedTrackExId: null
   }
 };
 
@@ -87,7 +88,9 @@ function icon(name, cls) {
     plus: '<path d="M5 12h14"/><path d="M12 5v14"/>',
     bulb: '<path d="M9 18h6"/><path d="M10 22h4"/><path d="M15.09 14c.18-.98.65-1.74 1.41-2.5A4.65 4.65 0 0 0 18 8 6 6 0 0 0 6 8c0 1 .23 2.23 1.5 3.5A4.61 4.61 0 0 1 8.91 14"/>',
     utensils: '<path d="M3 2v7c0 1.1.9 2 2 2h4a2 2 0 0 0 2-2V2"/><path d="M7 2v20"/><path d="M21 15V2a5 5 0 0 0-5 5v6c0 1.1.9 2 2 2h3Zm0 0v7"/>',
-    trophy: '<path d="M6 9H4.5a2.5 2.5 0 0 1 0-5H6"/><path d="M18 9h1.5a2.5 2.5 0 0 0 0-5H18"/><path d="M4 22h16"/><path d="M10 14.66V17c0 .55-.47.98-.97 1.21C7.85 18.75 7 20.24 7 22"/><path d="M14 14.66V17c0 .55.47.98.97 1.21C16.15 18.75 17 20.24 17 22"/><path d="M18 2H6v7a6 6 0 0 0 12 0V2Z"/>'
+    trophy: '<path d="M6 9H4.5a2.5 2.5 0 0 1 0-5H6"/><path d="M18 9h1.5a2.5 2.5 0 0 0 0-5H18"/><path d="M4 22h16"/><path d="M10 14.66V17c0 .55-.47.98-.97 1.21C7.85 18.75 7 20.24 7 22"/><path d="M14 14.66V17c0 .55.47.98.97 1.21C16.15 18.75 17 20.24 17 22"/><path d="M18 2H6v7a6 6 0 0 0 12 0V2Z"/>',
+    copy: '<rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>',
+    layers: '<path d="m12 2 10 5-10 5L2 7Z"/><path d="m2 12 10 5 10-5"/><path d="m2 17 10 5 10-5"/>'
   };
   return '<svg class="' + (cls || 'ic') + '" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' + paths[name] + '</svg>';
 }
@@ -406,6 +409,124 @@ function removeDayNotesFromLogs(dayId) {
   });
 }
 
+var MAX_TRACK_SETS = 12;
+
+function normalizeLogRec(rec) {
+  if (!rec || typeof rec !== 'object' || Array.isArray(rec)) return { sets: [] };
+  if (Array.isArray(rec.sets)) {
+    var clean = [];
+    rec.sets.forEach(function (set) {
+      if (!set || typeof set !== 'object') return;
+      var r = set.r === '' || set.r == null ? '' : num(set.r);
+      var w = set.w === '' || set.w == null ? '' : num(set.w);
+      if (r === '' && w === '') return;
+      clean.push({ w: w, r: r });
+    });
+    return { sets: clean.slice(0, MAX_TRACK_SETS) };
+  }
+  var lw = num(rec.w);
+  var lr = num(rec.r);
+  var ls = num(rec.s);
+  if (lw == null && lr == null && ls == null) return { sets: [] };
+  var count = ls != null ? Math.min(MAX_TRACK_SETS, Math.max(1, Math.round(ls))) : 1;
+  var sets = [];
+  for (var i = 0; i < count; i++) sets.push({ w: lw == null ? '' : lw, r: lr == null ? '' : lr });
+  return { sets: sets };
+}
+
+function logSets(rec) {
+  return normalizeLogRec(rec).sets;
+}
+
+function logAggregates(rec) {
+  var sets = logSets(rec);
+  var bestW = null;
+  var bestR = null;
+  sets.forEach(function (set) {
+    var w = num(set.w);
+    var r = num(set.r);
+    if (w != null && (bestW == null || w > bestW)) bestW = w;
+    if (r != null && (bestR == null || r > bestR)) bestR = r;
+  });
+  return { w: bestW, r: bestR, s: sets.length ? sets.length : null };
+}
+
+function normalizeLogs(logs) {
+  Object.keys(logs || {}).forEach(function (weekKey) {
+    var week = logs[weekKey];
+    if (!week || typeof week !== 'object') return;
+    Object.keys(week).forEach(function (key) {
+      if (key.indexOf(DAY_NOTE_PREFIX) === 0) return;
+      week[key] = normalizeLogRec(week[key]);
+    });
+  });
+  return logs;
+}
+
+function findExercise(exerciseId) {
+  var found = null;
+  state.plan.days.some(function (day) {
+    var ex = day.exercises.find(function (e) {
+      return e.id === exerciseId;
+    });
+    if (ex) found = ex;
+    return !!ex;
+  });
+  return found;
+}
+
+function formatWeightList(sets) {
+  var weights = [];
+  var allSame = true;
+  var first = null;
+  for (var i = 0; i < sets.length; i++) {
+    var w = num(sets[i].w);
+    if (w == null) continue;
+    if (first == null) first = w;
+    else if (w !== first) allSame = false;
+    if (weights.indexOf(w) === -1) weights.push(w);
+  }
+  if (first == null) return '';
+  if (allSame) return faNum(first) + ' کیلو';
+  return weights.map(function (w) {
+    return faNum(w);
+  }).join('/') + ' کیلو';
+}
+
+function formatSetsSummary(sets) {
+  if (!sets || !sets.length) return '';
+  var reps = sets.map(function (set) {
+    var r = num(set.r);
+    return r != null ? faNum(r) : '—';
+  }).join('/');
+  var weights = formatWeightList(sets);
+  return weights ? weights + ' • ' + reps + ' تکرار' : reps + ' تکرار';
+}
+
+function targetsText(targets) {
+  if (!targets || !targets.length) return '';
+  var tokens = [];
+  var uniformReps = num(targets[0].r);
+  var uniformWeight = num(targets[0].w);
+  var isUniform = uniformReps != null;
+  for (var i = 0; i < targets.length; i++) {
+    var w = num(targets[i].w);
+    var r = num(targets[i].r);
+    if (r != uniformReps || (w || null) !== (uniformWeight || null)) isUniform = false;
+  }
+  function token(w, r) {
+    return r + (w != null ? '@' + w : '');
+  }
+  if (isUniform) {
+    tokens = [targets.length + 'x' + token(uniformWeight, uniformReps)];
+  } else {
+    tokens = targets.map(function (t) {
+      return token(num(t.w), num(t.r));
+    });
+  }
+  return tokens.join('/');
+}
+
 function getPersonalRecord(exId, field, upToWeekKey, skipCurrentWeek) {
   var best = null;
   Object.keys(state.logs).forEach(function (weekKey) {
@@ -413,10 +534,28 @@ function getPersonalRecord(exId, field, upToWeekKey, skipCurrentWeek) {
     if (skipCurrentWeek && weekKey === upToWeekKey) return;
     var rec = state.logs[weekKey][exId];
     if (!rec) return;
-    var value = num(rec[field]);
-    if (value != null && (best == null || value > best)) best = value;
+    if (field === 's') {
+      var count = logSets(rec).length;
+      if (count && (best == null || count > best)) best = count;
+      return;
+    }
+    logSets(rec).forEach(function (set) {
+      var value = num(set[field]);
+      if (value != null && (best == null || value > best)) best = value;
+    });
   });
   return best;
+}
+
+function exerciseHasPrThisWeek(exId, weekKey) {
+  var rec = (state.logs[weekKey] || {})[exId];
+  if (!rec) return false;
+  var fields = ['w', 'r'];
+  return logSets(rec).some(function (set) {
+    return fields.some(function (field) {
+      return isNewRecord(exId, field, weekKey, set[field]);
+    });
+  });
 }
 
 function isNewRecord(exId, field, weekKey, value) {
@@ -426,16 +565,24 @@ function isNewRecord(exId, field, weekKey, value) {
   return priorBest == null || value2 > priorBest;
 }
 
-function isStaleNum(exId, weekKey, prevWeekKey) {
-  var cur = (state.logs[weekKey] || {})[exId] || {};
-  var prev = (state.logs[prevWeekKey] || {})[exId] || {};
-  var fields = ['w', 'r', 's'];
-  for (var i = 0; i < fields.length; i++) {
-    var a = num(cur[fields[i]]);
-    var b = num(prev[fields[i]]);
-    if (a == null || b == null || a !== b) return false;
+function isStaleLogTrace(curSets, prevSets) {
+  if (curSets.length !== prevSets.length) return false;
+  if (!curSets.length) return false;
+  for (var i = 0; i < curSets.length; i++) {
+    var aw = num(curSets[i].w);
+    var ar = num(curSets[i].r);
+    var bw = num(prevSets[i].w);
+    var br = num(prevSets[i].r);
+    if (aw !== bw || ar !== br) return false;
   }
   return true;
+}
+
+function isStaleNum(exId, weekKey, prevWeekKey) {
+  return isStaleLogTrace(
+    logSets((state.logs[weekKey] || {})[exId]),
+    logSets((state.logs[prevWeekKey] || {})[exId])
+  );
 }
 
 function updateRowHighlights(weekKey, prevWeekKey, exerciseId) {
@@ -443,13 +590,12 @@ function updateRowHighlights(weekKey, prevWeekKey, exerciseId) {
   if (!row) return;
   row.classList.toggle('is-stale', isStaleNum(exerciseId, weekKey, prevWeekKey));
   var hasPr = false;
-  ['w', 'r', 's'].forEach(function (field) {
-    var input = row.querySelector('input[data-field="' + field + '"]');
-    if (!input) return;
-    var isPr = isNewRecord(exerciseId, field, weekKey, input.value);
+  $all('input[data-set]', row).forEach(function (input) {
+    var isPr = isNewRecord(exerciseId, input.dataset.field, weekKey, input.value);
     input.classList.toggle('is-pr', isPr);
     if (isPr) hasPr = true;
   });
+  if (!hasPr) hasPr = exerciseHasPrThisWeek(exerciseId, weekKey);
   var trophy = row.querySelector('.pr-trophy');
   if (trophy) trophy.hidden = !hasPr;
 }
@@ -525,7 +671,7 @@ function buildExerciseViewHtml(dayId, ex, index, color) {
       '<span class="ex-index">' + faNum(index + 1) + '</span>' +
       '<div class="ex-main">' +
         '<strong>' + esc(ex.name) + '</strong>' +
-        '<span class="ex-meta">' + faNum(ex.sets) + ' ست × ' + faNum(ex.reps) + ' تکرار</span>' +
+        '<span class="ex-meta">' + (ex.targets && ex.targets.length ? 'هدف: ' + esc(formatSetsSummary(ex.targets)) : faNum(ex.sets) + ' ست × ' + faNum(ex.reps) + ' تکرار') + '</span>' +
         note +
       '</div>' +
       '<div class="row-actions">' +
@@ -545,6 +691,9 @@ function buildExerciseEditHtml(dayId, ex) {
         '<label class="field span-all">نام تمرین<input type="text" data-field="name" value="' + esc(ex.name) + '" maxlength="120"></label>' +
         '<label class="field">تعداد ست هدف<input type="number" min="1" step="1" inputmode="numeric" data-field="sets" value="' + esc(val(ex.sets)) + '"></label>' +
         '<label class="field">تعداد تکرار هدف<input type="number" min="1" step="1" inputmode="numeric" data-field="reps" value="' + esc(val(ex.reps)) + '"></label>' +
+        '<label class="field span-all">هدف ست‌به‌ست (اختیاری — خالی = یکنواخت)' +
+          '<input type="text" dir="ltr" data-field="targets" value="' + esc(targetsText(ex.targets)) + '" maxlength="60" placeholder="مثلاً 8/8/6 یا 2×8@40/1×6@45">' +
+        '</label>' +
         '<label class="field span-all">نکته فنی (اختیاری)<input type="text" data-field="note" value="' + esc(val(ex.note)) + '" maxlength="200"></label>' +
       '</div>' +
       '<div class="edit-actions">' +
@@ -633,47 +782,118 @@ function buildDaySummaryHtml(weekKey, day) {
 }
 
 function buildTrackRowHtml(weekKey, prevWeekKey, ex) {
-  function fieldLabel(field) {
-    return field === 'w' ? 'وزنه (کیلوگرم)' : field === 'r' ? 'تکرار واقعی' : 'ست انجام‌شده';
-  }
   var rec = (state.logs[weekKey] || {})[ex.id] || {};
-  var prev = (state.logs[prevWeekKey] || {})[ex.id] || {};
-  var prevParts = [];
-  if (num(prev.w) != null) prevParts.push(faNum(prev.w) + ' کیلو');
-  if (num(prev.r) != null) prevParts.push(faNum(prev.r) + ' تکرار');
-  if (num(prev.s) != null) prevParts.push(faNum(prev.s) + ' ست');
-  var prevHint = prevParts.length
-    ? 'هفته قبل: ' + prevParts.join(' • ')
+  var sets = logSets(rec);
+  var prevSets = logSets((state.logs[prevWeekKey] || {})[ex.id]);
+  var prevSummary = formatSetsSummary(prevSets);
+  var prevHint = prevSummary
+    ? 'هفته قبل: ' + prevSummary
     : 'هفته قبل مقداری ثبت نشده';
-  function cell(field, step) {
-    var record = getPersonalRecord(ex.id, field, weekKey);
-    var isPr = isNewRecord(ex.id, field, weekKey, rec[field]);
-    return (
-      '<div class="track-cell">' +
-        '<label>' + fieldLabel(field) +
-          '<input class="' + (isPr ? 'is-pr' : '') + '" type="number" min="0" step="' + step + '" inputmode="decimal" placeholder="' + (record != null ? faNum(record) : '') + '" data-wk="' + esc(weekKey) + '" data-ex="' + esc(ex.id) + '" data-field="' + field + '" value="' + esc(val(rec[field])) + '">' +
+  var hasPrThisWeek = exerciseHasPrThisWeek(ex.id, weekKey);
+  var trophy = '<span class="pr-trophy"' + (hasPrThisWeek ? '' : ' hidden') + ' title="رکورد جدید در این هفته">' + icon('trophy') + '</span>';
+  var stale = isStaleNum(ex.id, weekKey, prevWeekKey);
+  if (state.ui.expandedTrackExId === ex.id) {
+    return buildTrackExpandedHtml(weekKey, prevWeekKey, ex, trophy, stale);
+  }
+  var chip = sets.length
+    ? '<span class="sets-chip">' + icon('layers') + esc(formatSetsSummary(sets)) + '</span>'
+    : '<span class="sets-chip is-target">' + icon('layers') + 'هدف: ' + esc(ex.targets && ex.targets.length ? formatSetsSummary(ex.targets) : faNum(ex.sets) + '×' + faNum(ex.reps)) + ' — برای ثبت، لمس کنید</span>';
+  return (
+    '<div class="track-row' + (stale ? ' is-stale' : '') + '" data-ex-row="' + esc(ex.id) + '">' +
+      '<button type="button" class="t-main" data-action="toggle-track-set" data-ex="' + esc(ex.id) + '">' +
+        '<span class="t-head"><strong>' + esc(ex.name) + '</strong>' + trophy + '</span>' +
+        (ex.note ? '<span class="prev-hint">' + icon('bulb') + ' ' + esc(ex.note) + '</span>' : '') +
+        '<span class="prev-hint">' + esc(prevHint) + '</span>' +
+        chip +
+      '</button>' +
+      '<span class="t-chevron" aria-hidden="true">' + icon('down') + '</span>' +
+    '</div>'
+  );
+}
+
+function buildTrackExpandedHtml(weekKey, prevWeekKey, ex, trophy, stale) {
+  var rec = (state.logs[weekKey] || {})[ex.id] || {};
+  var sets = logSets(rec);
+  var prevSets = logSets((state.logs[prevWeekKey] || {})[ex.id]);
+  var prW = getPersonalRecord(ex.id, 'w', weekKey);
+  var prR = getPersonalRecord(ex.id, 'r', weekKey);
+  var targetCount = Math.round(num(ex.sets) || 3) || 3;
+  var rowCount = Math.min(MAX_TRACK_SETS, Math.max(sets.length, targetCount));
+  var rows = [];
+  for (var i = 0; i < rowCount; i++) {
+    var set = sets[i] || null;
+    var prevSet = prevSets[i] || null;
+    var trgt = ex.targets && ex.targets.length ? ex.targets[i] : null;
+    var phW = prevSet && num(prevSet.w) != null ? prevSet.w : (trgt && num(trgt.w) != null ? trgt.w : prW);
+    var phR = prevSet && num(prevSet.r) != null ? prevSet.r : (trgt && num(trgt.r) != null ? trgt.r : (num(ex.reps) != null ? ex.reps : prR));
+    rows.push(
+      '<div class="set-row">' +
+        '<span class="set-index">' + faNum(i + 1) + '</span>' +
+        '<label class="set-field"><span>وزنه (کیلوگرم)</span>' +
+          '<input class="' + (set && isNewRecord(ex.id, 'w', weekKey, set.w) ? 'is-pr' : '') + '" type="number" min="0" step="0.25" inputmode="decimal" placeholder="' + esc(phW != null && phW !== '' ? faNum(phW) : '') + '" data-wk="' + esc(weekKey) + '" data-ex="' + esc(ex.id) + '" data-set="' + i + '" data-field="w" value="' + esc(val(set && set.w)) + '">' +
         '</label>' +
+        '<label class="set-field"><span>تکرار</span>' +
+          '<input class="' + (set && isNewRecord(ex.id, 'r', weekKey, set.r) ? 'is-pr' : '') + '" type="number" min="0" step="1" inputmode="numeric" placeholder="' + esc(phR != null && phR !== '' ? faNum(phR) : '') + '" data-wk="' + esc(weekKey) + '" data-ex="' + esc(ex.id) + '" data-set="' + i + '" data-field="r" value="' + esc(val(set && set.r)) + '">' +
+        '</label>' +
+        (set
+          ? '<button type="button" class="icon-btn danger set-remove" data-action="remove-track-set" data-wk="' + esc(weekKey) + '" data-ex="' + esc(ex.id) + '" data-set="' + i + '" title="حذف ست" aria-label="حذف ست ' + faNum(i + 1) + '">' + icon('trash') + '</button>'
+          : '<span class="set-remove" aria-hidden="true"></span>') +
       '</div>'
     );
   }
-  var hasPrThisWeek = false;
-  ['w', 'r', 's'].forEach(function (field) {
-    if (isNewRecord(ex.id, field, weekKey, rec[field])) hasPrThisWeek = true;
-  });
-  var trophy = '<span class="pr-trophy"' + (hasPrThisWeek ? '' : ' hidden') + ' title="رکورد جدید در این هفته">' + icon('trophy') + '</span>';
-  var stale = isStaleNum(ex.id, weekKey, prevWeekKey);
   return (
-    '<div class="track-row' + (stale ? ' is-stale' : '') + '" data-ex-row="' + esc(ex.id) + '">' +
-      '<div class="t-info">' +
-        '<strong>' + esc(ex.name) + trophy + '</strong>' +
+    '<div class="track-row is-expanded' + (stale ? ' is-stale' : '') + '" data-ex-row="' + esc(ex.id) + '">' +
+      '<header class="t-info">' +
+        '<div class="t-line">' +
+          '<span class="t-head"><strong>' + esc(ex.name) + '</strong>' + trophy + '</span>' +
+          '<button type="button" class="icon-btn t-collapse" data-action="toggle-track-set" data-ex="' + esc(ex.id) + '" title="بستن" aria-label="بستن ویرایش ست‌های ' + esc(ex.name) + '">' + icon('up') + '</button>' +
+        '</div>' +
         (ex.note ? '<span class="prev-hint">' + icon('bulb') + ' ' + esc(ex.note) + '</span>' : '') +
-        '<span class="prev-hint">' + esc(prevHint) + '</span>' +
+      '</header>' +
+      '<div class="quick-row">' +
+        '<label class="field quick-field">ثبت سریع ست‌ها' +
+          '<input type="text" dir="ltr" data-role="track-quick" data-wk="' + esc(weekKey) + '" data-ex="' + esc(ex.id) + '" placeholder="مثلاً 8/8/6 یا 3×8@40">' +
+        '</label>' +
+        '<button type="button" class="btn btn-ghost btn-sm" data-action="copy-track-prev" data-wk="' + esc(weekKey) + '" data-ex="' + esc(ex.id) + '">' + icon('copy') + ' کپی از هفته قبل</button>' +
       '</div>' +
-      cell('w', '0.25') +
-      cell('r', '1') +
-      cell('s', '1') +
+      '<div class="track-sets">' +
+        '<div class="set-row sets-head" aria-hidden="true">' +
+          '<span class="set-index">ست</span>' +
+          '<span class="set-field">وزنه (کیلوگرم)</span>' +
+          '<span class="set-field">تکرار</span>' +
+          '<span class="set-remove"></span>' +
+        '</div>' +
+        rows.join('') +
+      '</div>' +
+      '<div class="track-sets-foot">' +
+        '<button type="button" class="btn-dashed" data-action="add-track-set" data-wk="' + esc(weekKey) + '" data-ex="' + esc(ex.id) + '">' + icon('plus') + ' افزودن ست' + (sets.length ? ' (حالا ' + faNum(sets.length) + ' ست)' : '') + '</button>' +
+      '</div>' +
     '</div>'
   );
+}
+
+function parseQuickSets(text) {
+  var raw = enNum(String(text == null ? '' : text)).trim();
+  if (!raw) return [];
+  raw = raw.replace(/[×xX*]/g, 'x');
+  raw = raw.replace(/[،,؛;|]/g, '/');
+  var parts = raw.split('/').filter(function (part) {
+    return part.trim() !== '';
+  });
+  var sets = [];
+  for (var i = 0; i < parts.length; i++) {
+    var match = parts[i].trim().match(/^(\d{1,2})(?:x(\d{1,2}))?(?:@(\d{1,3}(?:\.\d{1,2})?))?$/);
+    if (!match) return null;
+    var count = match[2] ? parseInt(match[1], 10) : 1;
+    var reps = match[2] ? parseInt(match[2], 10) : parseInt(match[1], 10);
+    var weight = match[3] !== undefined ? parseFloat(match[3]) : '';
+    if (!count || !reps) return null;
+    for (var j = 0; j < count; j++) {
+      if (sets.length >= MAX_TRACK_SETS) return null;
+      sets.push({ w: weight === '' ? '' : weight, r: reps });
+    }
+  }
+  return sets.length ? sets : null;
 }
 
 function mealTotals(meal) {
@@ -939,10 +1159,12 @@ function addExercise(dayId) {
 }
 
 function readExerciseForm(row) {
+  var rawTargets = $('[data-field="targets"]', row).value.trim();
   return {
     name: $('[data-field="name"]', row).value.trim(),
     sets: Math.max(1, Math.round(num($('[data-field="sets"]', row).value) || 3)),
     reps: Math.max(1, Math.round(num($('[data-field="reps"]', row).value) || 10)),
+    targets: rawTargets ? parseQuickSets(rawTargets) : [],
     note: $('[data-field="note"]', row).value.trim()
   };
 }
@@ -960,9 +1182,15 @@ function saveExercise(dayId, exerciseId) {
     showToast('نام تمرین نمی‌تواند خالی باشد.', 'error');
     return;
   }
+  if (data.targets === null) {
+    $('[data-field="targets"]', row).focus();
+    showToast('فرمت هدف ست‌به‌ست درست نیست. مثلاً 8/8/6 یا 3×8@40', 'error');
+    return;
+  }
   ex.name = data.name;
-  ex.sets = data.sets;
-  ex.reps = data.reps;
+  ex.targets = data.targets.length ? data.targets : null;
+  ex.sets = ex.targets ? ex.targets.length : data.sets;
+  ex.reps = ex.targets ? ex.targets[0].r : data.reps;
   ex.note = data.note;
   persistPlan();
   resetUiEditing();
@@ -1020,6 +1248,69 @@ function moveExercise(dayId, exerciseId, dir) {
   day.exercises[target] = tmp;
   persistPlan();
   renderPlan();
+}
+
+function ensureTrackRec(weekKey, exerciseId) {
+  if (!state.logs[weekKey]) state.logs[weekKey] = {};
+  var rec = state.logs[weekKey][exerciseId];
+  if (!rec || typeof rec !== 'object' || Array.isArray(rec)) rec = { sets: [] };
+  if (!Array.isArray(rec.sets)) rec = normalizeLogRec(rec);
+  state.logs[weekKey][exerciseId] = rec;
+  return rec;
+}
+
+function addTrackSet(weekKey, exerciseId) {
+  var ex = findExercise(exerciseId);
+  var rec = ensureTrackRec(weekKey, exerciseId);
+  var sets = rec.sets;
+  if (sets.length >= MAX_TRACK_SETS) {
+    showToast('حداکثر ' + faNum(MAX_TRACK_SETS) + ' ست می‌توان ثبت کرد.', 'error');
+    return;
+  }
+  var last = sets.length ? sets[sets.length - 1] : null;
+  var prevSets = logSets((state.logs[weekInfoAt(state.weekOffset - 1).key] || {})[exerciseId]);
+  var prevFirst = prevSets.length ? prevSets[0] : null;
+  var w = last && num(last.w) != null
+    ? last.w
+    : prevFirst && num(prevFirst.w) != null
+      ? prevFirst.w
+      : ((ex && getPersonalRecord(exerciseId, 'w', weekKey)) || '');
+  var r = last && num(last.r) != null
+    ? last.r
+    : prevFirst && num(prevFirst.r) != null
+      ? prevFirst.r
+      : (ex ? ex.reps : '');
+  sets.push({ w: val(w), r: val(r) });
+  queueLogsSave();
+  renderTracker();
+  var repInput = $('#tracker-days .track-row[data-ex-row="' + exerciseId + '"] input[data-set="' + (sets.length - 1) + '"][data-field="r"]');
+  if (repInput) repInput.focus();
+}
+
+function removeTrackSet(weekKey, exerciseId, setIndex) {
+  var rec = ensureTrackRec(weekKey, exerciseId);
+  if (setIndex < 0 || setIndex >= rec.sets.length) return;
+  rec.sets.splice(setIndex, 1);
+  if (!rec.sets.length) delete state.logs[weekKey][exerciseId];
+  queueLogsSave();
+  renderTracker();
+  var weekInfo = weekInfoAt(state.weekOffset);
+  updateRowHighlights(weekInfo.key, weekInfoAt(state.weekOffset - 1).key, exerciseId);
+}
+
+function copyTrackPrev(weekKey, exerciseId) {
+  var prevSets = logSets((state.logs[weekInfoAt(state.weekOffset - 1).key] || {})[exerciseId]).map(function (set) {
+    return { w: val(set.w), r: val(set.r) };
+  });
+  if (!prevSets.length) {
+    showToast('برای این تمرین در هفته قبل مقداری ثبت نشده است.', 'error');
+    return;
+  }
+  var rec = ensureTrackRec(weekKey, exerciseId);
+  rec.sets = prevSets.slice(0, MAX_TRACK_SETS);
+  queueLogsSave();
+  renderTracker();
+  showToast('ست‌های هفته قبل کپی شد.', 'success');
 }
 
 function addMeal() {
@@ -1205,6 +1496,21 @@ var ACTIONS = {
     state.ui.selectedTrackerDayId = btn.dataset.id;
     renderTracker();
   },
+  'toggle-track-set': function (btn) {
+    flushPendingLogsSave();
+    var exId = btn.dataset.ex;
+    state.ui.expandedTrackExId = state.ui.expandedTrackExId === exId ? null : exId;
+    renderTracker();
+  },
+  'add-track-set': function (btn) {
+    addTrackSet(btn.dataset.wk, btn.dataset.ex);
+  },
+  'remove-track-set': function (btn) {
+    removeTrackSet(btn.dataset.wk, btn.dataset.ex, parseInt(btn.dataset.set, 10));
+  },
+  'copy-track-prev': function (btn) {
+    copyTrackPrev(btn.dataset.wk, btn.dataset.ex);
+  },
   'add-meal': function () {
     addMeal();
   },
@@ -1318,7 +1624,10 @@ function restoreBackup(file) {
         });
         if (valid[KEYS.plan]) state.plan = valid[KEYS.plan];
         if (valid[KEYS.nutrition]) state.nutrition = valid[KEYS.nutrition];
-        if (valid[KEYS.logs]) state.logs = valid[KEYS.logs];
+        if (valid[KEYS.logs]) {
+          state.logs = normalizeLogs(valid[KEYS.logs]);
+          persistLogs();
+        }
         resetUiEditing();
         state.weekOffset = 0;
         renderAll();
@@ -1406,7 +1715,7 @@ function loadData(seedIfMissing) {
     var raw = localStorage.getItem(KEYS.logs);
     if (raw != null) {
       var parsed = JSON.parse(raw);
-      if (validLogs(parsed)) state.logs = parsed;
+      if (validLogs(parsed)) state.logs = normalizeLogs(parsed);
     }
   } catch (err) {
     state.logs = {};
@@ -1456,16 +1765,33 @@ function bindEvents() {
       queueLogsSave();
       return;
     }
-    var input = event.target.closest('input[data-wk]');
-    if (!input) return;
-    var weekKey = input.dataset.wk;
-    var exerciseId = input.dataset.ex;
-    var field = input.dataset.field;
-    if (!state.logs[weekKey]) state.logs[weekKey] = {};
-    if (!state.logs[weekKey][exerciseId]) state.logs[weekKey][exerciseId] = {};
-    state.logs[weekKey][exerciseId][field] = input.value.trim();
+    var setInput = event.target.closest('input[data-wk][data-set]');
+    if (!setInput) return;
+    var weekKey = setInput.dataset.wk;
+    var exerciseId = setInput.dataset.ex;
+    var setIndex = parseInt(setInput.dataset.set, 10);
+    if (isNaN(setIndex)) return;
+    var rec = ensureTrackRec(weekKey, exerciseId);
+    if (setIndex >= MAX_TRACK_SETS || setInput.dataset.field === 's') return;
+    while (rec.sets.length <= setIndex) rec.sets.push({ w: '', r: '' });
+    rec.sets[setIndex][setInput.dataset.field] = setInput.value.trim();
     updateRowHighlights(weekKey, weekInfoAt(state.weekOffset - 1).key, exerciseId);
     queueLogsSave();
+  });
+
+  $('#panel-tracker').addEventListener('change', function (event) {
+    var quick = event.target.closest('input[data-role="track-quick"]');
+    if (!quick) return;
+    var parsed = parseQuickSets(quick.value);
+    if (parsed === null) {
+      showToast('فرمت ثبت سریع درست نیست. مثلاً 8/8/6 یا 3×8@40', 'error');
+      return;
+    }
+    if (!parsed.length) return;
+    var rec = ensureTrackRec(quick.dataset.wk, quick.dataset.ex);
+    rec.sets = parsed;
+    queueLogsSave();
+    renderTracker();
   });
 
   $('#btn-add-day').addEventListener('click', addDay);
